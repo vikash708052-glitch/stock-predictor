@@ -1,15 +1,12 @@
-name: stockenv
+name: stock-predictor
 channels:
     - conda-forge
 dependencies:
     - python=3.11
     - pip
     - pip:
-        - streamlit==1.35.0
-        - pandas==2.2.2
-        - yfinance==0.2.40
-        - prophet==1.1.5
-        - plotly==5.22.0
-        - scikit-learn==1.5.0
-        - ta==0.11.0
-        - pandas-datareader
+        - streamlit
+        - plotly
+        - pandas
+        - statsmodels
+        - ta
