@@ -17,19 +17,40 @@ with st.sidebar:
     run_btn = st.button("🚀 Analyze Stock", type="primary")
 
 if run_btn:
-    data = yf.download(ticker, start=date.today()-timedelta(days=730), end=date.today())
-    if data.empty:
-        st.error("No data found")
-        st.stop()
+    with st.spinner("Fetching data from Yahoo..."):
+        try:
+            # Fix 1: Session reset FOR Yahoo block not block 
+            yf.shared._requests = None
+            
+            # Fix 2: period use , start/end not
+            data = yf.download(ticker, period="2y", interval="1d", progress=False, auto_adjust=True)
+            
+            # Fix 3: MultiIndex column fix - yfinance anytime (Price, Ticker) creat
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.droplevel(1)
+            
+            # Fix 4: Empty check with better message
+            if data.empty or len(data) < 30:
+                st.error(f"No data for {ticker}. Yahoo blocked Streamlit IP. 2 min बाद try करो या दूसरा stock डालो: MSFT, GOOGL")
+                st.stop()
+                
+        except Exception as e:
+            st.error(f"Yahoo Error: {str(e)}. App reboot or change ticker .")
+            st.stop()
     
+    # data is ok
+    data = data.dropna()
     data['RSI'] = ta.momentum.RSIIndicator(data['Close']).rsi()
-    df = data.reset_index()[['Date','Close']].rename(columns={'Date':'ds','Close':'y'})
-    m = Prophet()
-    m.fit(df)
-    future = m.make_future_dataframe(periods=n_days)
-    forecast = m.predict(future)
+    data['50MA'] = data['Close'].rolling(50).mean()
     
-    st.line_chart(forecast.set_index('ds')['yhat'])
-    st.metric("Prediction", f"₹{forecast['yhat'].iloc[-1]:.2f}")
-else:
-    st.info("👈 Sidebar to Analyze click")
+    # clean df for prophet
+    df_prophet = data.reset_index()[['Date','Close']].rename(columns={'Date':'ds','Close':'y'})
+    df_prophet = df_prophet.dropna()
+    
+    with st.spinner("Training Prophet AI Model..."):
+        m = Prophet(daily_seasonality=True, yearly_seasonality=True)
+        m.fit(df_prophet)
+        future = m.make_future_dataframe(periods=n_days)
+        forecast = m.predict(future)
+    
+    # other is same 
