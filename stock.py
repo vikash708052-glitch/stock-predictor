@@ -41,7 +41,7 @@ if run_btn and uploaded_file is not None:
         data['Date'] = pd.to_datetime(data['Date'])
         data = data.sort_values('Date').set_index('Date')
         data = data.asfreq('D')  # Daily frequency fix
-        data['Close'] = data['Close'].fillna(method='ffill')
+        data['Close'] = data['Close'].ffill()
         
         # Indicators
         data['RSI'] = ta.momentum.RSIIndicator(data['Close']).rsi()
