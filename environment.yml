@@ -8,5 +8,8 @@ dependencies:
         - streamlit
         - plotly
         - pandas
-        - statsmodels
+        - numpy
+        - scikit-learn
+        - tensorflow-cpu
         - ta
+        - pandas-datareader
