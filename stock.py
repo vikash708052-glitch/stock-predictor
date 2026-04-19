@@ -7,7 +7,7 @@ import ta
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
-from pandas_datareader import data as pdr
+import yfinance as yf
 from datetime import datetime, timedelta
 import warnings
 warnings.filterwarnings('ignore')
@@ -48,17 +48,19 @@ with st.sidebar:
 
 def load_stock_data():
     if data_source == "Live Stock Symbol":
-        with st.spinner(f"Fetching {ticker} from Stooq..."):
+        with st.spinner(f"Fetching {ticker} from Yahoo Finance..."):
             try:
-                stooq_symbol = ticker.lower().replace('.ns', '.in')
-                df = pdr.DataReader(stooq_symbol, 'stooq', start=datetime.now() - timedelta(days=int(period[0])*365))
+                stock = yf.Ticker(ticker)
+                df = stock.history(period=period)
+                if df.empty:
+                    st.error(f"No data found for {ticker}. Check symbol.")
+                    st.stop()
                 df = df.reset_index()
-                df.columns = df.columns.str.title()
                 df = df[['Date', 'Close', 'High', 'Low', 'Open', 'Volume']].dropna()
                 st.success(f"Loaded {len(df)} trading days")
                 return df
             except Exception as e:
-                st.error(f"Data Fetch Error: {e}")
+                st.error(f"Data Fetch Error: {e}. Try CSV upload.")
                 st.stop()
     else:
         data = pd.read_csv(uploaded_file)
