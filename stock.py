@@ -123,22 +123,37 @@ for idx, (tick, name) in enumerate(trending.items()):
             st.session_state.ticker = tick
 
 with st.expander("🔍 SEARCH"):
-    search = st.text_input("Enter Symbol", placeholder="Example: AAPL, TSLA, MARUTI.NS", label_visibility="collapsed")
+    search = st.text_input("Enter Symbol", placeholder="Example: RELIANCE, TSLA, AAPL", label_visibility="collapsed")
     if st.button("SCAN", use_container_width=True):
         if search:
-            st.session_state.ticker = search.upper() if "." in search.upper() else search.upper() + ".NS"
+            search = search.upper().strip()
+            # Indian stocks ke liye auto .NS add karo
+            indian_stocks = ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'ADANIENT', 
+                           'TATAMOTORS', 'ITC', 'WIPRO', 'BAJFINANCE', 'LT', 'MARUTI', 'AXISBANK']
+            if search in indian_stocks and '.NS' not in search:
+                search = search + '.NS'
+            elif '.' not in search and len(search) <= 10:
+                search = search + '.NS'
+            st.session_state.ticker = search
 
 st.markdown("---")
 
 # DATA FETCH
 ticker = st.session_state.ticker
 
-with st.spinner(f'LOADING {ticker}...'):
-    try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
-        hist = stock.history(period="1y")
-        news = stock.news
+with st.expander("🔍 SEARCH"):
+    search = st.text_input("Enter Symbol", placeholder="Example: RELIANCE, TSLA, AAPL", label_visibility="collapsed")
+    if st.button("SCAN", use_container_width=True):
+        if search:
+            search = search.upper().strip()
+            # Indian stocks ke liye auto .NS add karo
+            indian_stocks = ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'ADANIENT', 
+                           'TATAMOTORS', 'ITC', 'WIPRO', 'BAJFINANCE', 'LT', 'MARUTI', 'AXISBANK']
+            if search in indian_stocks and '.NS' not in search:
+                search = search + '.NS'
+            elif '.' not in search and len(search) <= 10:
+                search = search + '.NS'
+            st.session_state.ticker = search
         
         if hist.empty:
             st.error(f"ERROR: No data available for {ticker}")
