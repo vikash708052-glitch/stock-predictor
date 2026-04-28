@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 import numpy as np
+import time
 
 st.set_page_config(
     page_title="FinVista Nexus",
@@ -12,18 +13,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# CLEAN FUTURISTIC CSS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
-    
     .stApp {
         background: #0a0a0f;
-        background-image: 
-            radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
-            radial-gradient(circle at 80% 80%, rgba(255, 119, 198, 0.3) 0%, transparent 50%);
+        background-image: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+                          radial-gradient(circle at 80% 80%, rgba(255, 119, 198, 0.3) 0%, transparent 50%);
     }
-    
     .nexus-header {
         font-family: 'Orbitron', sans-serif;
         font-size: 4rem;
@@ -36,12 +33,10 @@ st.markdown("""
         animation: flicker 3s infinite alternate;
         margin-bottom: 2rem;
     }
-    
     @keyframes flicker {
         0%, 100% { filter: drop-shadow(0 0 20px #00d9ff); }
         50% { filter: drop-shadow(0 0 40px #7a00ff); }
     }
-    
     .glass-card {
         background: rgba(255, 255, 255, 0.05);
         backdrop-filter: blur(10px);
@@ -50,7 +45,6 @@ st.markdown("""
         padding: 1.5rem;
         box-shadow: 0 8px 32px 0 rgba(0, 217, 255, 0.2);
     }
-    
     .metric-value {
         font-family: 'Orbitron', sans-serif;
         font-size: 2.2rem;
@@ -59,7 +53,6 @@ st.markdown("""
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
-    
     .metric-label {
         font-family: 'Rajdhani', sans-serif;
         color: #7a00ff;
@@ -67,11 +60,9 @@ st.markdown("""
         letter-spacing: 2px;
         text-transform: uppercase;
     }
-    
     .signal-buy {color: #00ff88; text-shadow: 0 0 20px #00ff88; font-family: 'Orbitron'; font-size: 1.8rem; font-weight: 700;}
     .signal-sell {color: #ff0055; text-shadow: 0 0 20px #ff0055; font-family: 'Orbitron'; font-size: 1.8rem; font-weight: 700;}
     .signal-hold {color: #ffaa00; text-shadow: 0 0 20px #ffaa00; font-family: 'Orbitron'; font-size: 1.8rem; font-weight: 700;}
-    
     .news-card {
         background: rgba(255, 255, 255, 0.03);
         border-left: 3px solid #00d9ff;
@@ -79,12 +70,6 @@ st.markdown("""
         margin: 1rem 0;
         border-radius: 10px;
     }
-    
-    .news-card:hover {
-        background: rgba(0, 217, 255, 0.1);
-        border-left: 3px solid #7a00ff;
-    }
-    
     .stButton>button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -93,22 +78,14 @@ st.markdown("""
         font-family: 'Rajdhani', sans-serif;
         font-weight: 700;
     }
-    
-    .stButton>button:hover {
-        box-shadow: 0 0 30px #00d9ff;
-        transform: scale(1.05);
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# HEADER - ONLY LOGO
 st.markdown('<p class="nexus-header">FINVISTA NEXUS</p>', unsafe_allow_html=True)
 
-# SESSION STATE
 if 'ticker' not in st.session_state:
     st.session_state.ticker = "RELIANCE.NS"
 
-# QUICK ACCESS
 cols = st.columns(6)
 trending = {
     "RELIANCE.NS": "RELIANCE", "TCS.NS": "TCS", "INFY.NS": "INFOSYS", 
@@ -123,11 +100,10 @@ for idx, (tick, name) in enumerate(trending.items()):
             st.session_state.ticker = tick
 
 with st.expander("🔍 SEARCH"):
-    search = st.text_input("Enter Symbol", placeholder="Example: RELIANCE, TSLA, AAPL", label_visibility="collapsed")
+    search = st.text_input("Enter Symbol", placeholder="Example: RELIANCE, TSLA", label_visibility="collapsed")
     if st.button("SCAN", use_container_width=True):
         if search:
             search = search.upper().strip()
-            # Indian stocks ke liye auto .NS add karo
             indian_stocks = ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'ADANIENT', 
                            'TATAMOTORS', 'ITC', 'WIPRO', 'BAJFINANCE', 'LT', 'MARUTI', 'AXISBANK']
             if search in indian_stocks and '.NS' not in search:
@@ -138,32 +114,35 @@ with st.expander("🔍 SEARCH"):
 
 st.markdown("---")
 
-# DATA FETCH
 ticker = st.session_state.ticker
 
-with st.expander("🔍 SEARCH"):
-    search = st.text_input("Enter Symbol", placeholder="Example: RELIANCE, TSLA, AAPL", label_visibility="collapsed")
-    if st.button("SCAN", use_container_width=True):
-        if search:
-            search = search.upper().strip()
-            # Indian stocks ke liye auto .NS add karo
-            indian_stocks = ['RELIANCE', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'ADANIENT', 
-                           'TATAMOTORS', 'ITC', 'WIPRO', 'BAJFINANCE', 'LT', 'MARUTI', 'AXISBANK']
-            if search in indian_stocks and '.NS' not in search:
-                search = search + '.NS'
-            elif '.' not in search and len(search) <= 10:
-                search = search + '.NS'
-            st.session_state.ticker = search
-        
-        if hist.empty:
-            st.error(f"ERROR: No data available for {ticker}")
-            st.stop()
-            
-    except Exception as e:
-        st.error(f"CONNECTION ERROR: Unable to fetch data")
+with st.spinner(f'LOADING {ticker}...'):
+    stock = yf.Ticker(ticker)
+    hist = pd.DataFrame()
+    info = {}
+    news = []
+    
+    for attempt in range(3):
+        try:
+            hist = stock.history(period="1y")
+            if not hist.empty:
+                info = stock.info
+                try:
+                    news = stock.news
+                except:
+                    news = []
+                break
+            time.sleep(1)
+        except Exception:
+            if attempt == 2:
+                st.error(f"ERROR: Unable to fetch data for {ticker}")
+                st.stop()
+            time.sleep(2)
+    
+    if hist.empty:
+        st.error(f"ERROR: No data available for {ticker}")
         st.stop()
 
-# CALCULATIONS
 current_price = hist['Close'][-1]
 prev_close = hist['Close'][-2]
 change = current_price - prev_close
@@ -179,7 +158,6 @@ rs = gain / loss
 hist['RSI'] = 100 - (100 / (1 + rs))
 rsi = hist['RSI'][-1]
 
-# SIGNAL
 if rsi < 30 and current_price > hist['SMA20'][-1]:
     signal = "STRONG BUY"; signal_class = "signal-buy"; signal_icon = "▲▲"
 elif rsi > 70 and current_price < hist['SMA20'][-1]:
@@ -191,11 +169,9 @@ elif current_price < hist['SMA50'][-1]:
 else:
     signal = "HOLD"; signal_class = "signal-hold"; signal_icon = "■■■"
 
-# ASSET HEADER
 st.markdown(f"## {info.get('longName', ticker)} // {ticker}")
 st.caption(f"{info.get('sector', 'N/A')} | {info.get('industry', 'N/A')}")
 
-# METRICS
 col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
@@ -231,11 +207,9 @@ with col5:
 
 st.markdown("---")
 
-# TABS - CLEAN NAMES
 tab1, tab2, tab3, tab4 = st.tabs(["CHART", "DATA", "NEWS", "FORECAST"])
 
 with tab1:
-    # 3D CHART
     recent_hist = hist.tail(90).copy()
     recent_hist['Index'] = range(len(recent_hist))
     
@@ -255,7 +229,6 @@ with tab1:
     )
     st.plotly_chart(fig_3d, use_container_width=True)
     
-    # CANDLESTICK
     fig = go.Figure()
     fig.add_trace(go.Candlestick(x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close'],
                                  increasing_line_color='#00ff88', decreasing_line_color='#ff0055'))
@@ -275,13 +248,11 @@ with tab2:
         st.metric("P/E Ratio", f"{info.get('trailingPE', 'N/A')}")
         st.metric("P/B Ratio", f"{info.get('priceToBook', 'N/A')}")
         st.metric("EPS", f"₹{info.get('trailingEps', 'N/A')}")
-        st.metric("Dividend Yield", f"{info.get('dividendYield', 0)*100:.2f}%")
     
     with col2:
         st.markdown("#### PERFORMANCE")
         st.metric("Profit Margin", f"{info.get('profitMargins', 0)*100:.1f}%")
         st.metric("ROE", f"{info.get('returnOnEquity', 0)*100:.1f}%")
-        st.metric("Revenue", f"₹{info.get('totalRevenue', 0)/10000000:.0f} Cr")
         st.metric("Beta", f"{info.get('beta', 'N/A')}")
     
     with col3:
@@ -289,7 +260,6 @@ with tab2:
         st.metric("52W High", f"₹{info.get('fiftyTwoWeekHigh', 0):.2f}")
         st.metric("52W Low", f"₹{info.get('fiftyTwoWeekLow', 0):.2f}")
         st.metric("50D Avg", f"₹{info.get('fiftyDayAverage', 0):.2f}")
-        st.metric("200D Avg", f"₹{info.get('twoHundredDayAverage', 0):.2f}")
     
     st.markdown("---")
     st.markdown(f'<div class="glass-card">{info.get("longBusinessSummary", "No data available.")}</div>', unsafe_allow_html=True)
@@ -345,7 +315,6 @@ with tab4:
         st.markdown(f'<p class="metric-value" style="color:{risk_color};">{risk}</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Prediction chart
     pred_dates = pd.date_range(start=hist.index[-1], periods=pred_days+1, freq='D')[1:]
     pred_prices = np.linspace(current_price, future_price, pred_days)
     
@@ -357,10 +326,9 @@ with tab4:
                            plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=30, b=0))
     st.plotly_chart(fig_pred, use_container_width=True)
 
-# FOOTER
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; font-family: Rajdhani, sans-serif; color: #333; font-size: 0.7rem;'>
-    FINVISTA NEXUS v5.0 | NOT FINANCIAL ADVICE
+    FINVISTA NEXUS v5.0
 </div>
 """, unsafe_allow_html=True)
