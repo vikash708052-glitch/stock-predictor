@@ -1,47 +1,37 @@
 import streamlit as st
-import yfinance as yf
+from yahooquery import Ticker
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 from datetime import datetime, timedelta
 import numpy as np
-import time
 
 st.set_page_config(page_title="FinVista Nexus", page_icon="🚀", layout="wide", initial_sidebar_state="collapsed")
 
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
-   .stApp {background: #0a0a0f; background-image: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.3) 0%, transparent 50%);}
-   .nexus-header {font-family: 'Orbitron', sans-serif; font-size: 3.5rem; font-weight: 900; background: linear-gradient(45deg, #00d9ff, #7a00ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; letter-spacing: 8px; margin-bottom: 1rem;}
-   .glass-card {background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1); padding: 1.2rem; box-shadow: 0 8px 32px 0 rgba(0, 217, 255, 0.2);}
-   .metric-value {font-family: 'Orbitron', sans-serif; font-size: 2rem; font-weight: 700; background: linear-gradient(90deg, #00d9ff, #ffffff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;}
-   .metric-label {font-family: 'Rajdhani', sans-serif; color: #7a00ff; font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase;}
-   .signal-buy {color: #00ff88; text-shadow: 0 0 20px #00ff88; font-family: 'Orbitron'; font-size: 1.5rem; font-weight: 700;}
-   .signal-sell {color: #ff0055; text-shadow: 0 0 20px #ff0055; font-family: 'Orbitron'; font-size: 1.5rem; font-weight: 700;}
-   .signal-hold {color: #ffaa00; text-shadow: 0 0 20px #ffaa00; font-family: 'Orbitron'; font-size: 1.5rem; font-weight: 700;}
-   .news-card {background: rgba(255, 255, 255, 0.03); border-left: 3px solid #00d9ff; padding: 1rem; margin: 0.8rem 0; border-radius: 10px;}
-   .stButton>button {background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: 2px solid #00d9ff; border-radius: 12px; font-family: 'Rajdhani', sans-serif; font-weight: 700;}
-   .stTabs [data-baseweb="tab-list"] {gap: 8px;}
-   .stTabs [data-baseweb="tab"] {background: rgba(255,255,255,0.05); border-radius: 10px; font-family: 'Rajdhani', sans-serif; font-weight: 700;}
+  .stApp {background: #0a0a0f; background-image: radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.3) 0%, transparent 50%);}
+  .nexus-header {font-family: 'Orbitron', sans-serif; font-size: 3.5rem; font-weight: 900; background: linear-gradient(45deg, #00d9ff, #7a00ff, #ff00c8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; letter-spacing: 8px; margin-bottom: 1rem;}
+  .glass-card {background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1); padding: 1.2rem;}
+  .metric-value {font-family: 'Orbitron', sans-serif; font-size: 2rem; font-weight: 700; background: linear-gradient(90deg, #00d9ff, #ffffff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;}
+  .metric-label {font-family: 'Rajdhani', sans-serif; color: #7a00ff; font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase;}
+  .signal-buy {color: #00ff88; text-shadow: 0 0 20px #00ff88; font-family: 'Orbitron'; font-size: 1.5rem; font-weight: 700;}
+  .signal-sell {color: #ff0055; text-shadow: 0 0 20px #ff0055; font-family: 'Orbitron'; font-size: 1.5rem; font-weight: 700;}
+  .signal-hold {color: #ffaa00; text-shadow: 0 0 20px #ffaa00; font-family: 'Orbitron'; font-size: 1.5rem; font-weight: 700;}
+  .stButton>button {background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: 2px solid #00d9ff; border-radius: 12px; font-family: 'Rajdhani', sans-serif; font-weight: 700;}
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<p class="nexus-header">FINVISTA NEXUS</p>', unsafe_allow_html=True)
 
-# SESSION STATE
 if 'ticker' not in st.session_state:
     st.session_state.ticker = "RELIANCE.NS"
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = ["RELIANCE.NS", "TCS.NS", "INFY.NS"]
-if 'compare_list' not in st.session_state:
-    st.session_state.compare_list = []
 
-# MAIN MODE SELECTOR
 mode = st.selectbox("SELECT MODE", ["SINGLE ASSET", "PORTFOLIO TRACKER", "COMPARE", "SCREENER"], label_visibility="collapsed")
 
 if mode == "SINGLE ASSET":
-    # QUICK ACCESS
     cols = st.columns(6)
     trending = {"RELIANCE.NS": "RELIANCE", "TCS.NS": "TCS", "INFY.NS": "INFOSYS", "HDFCBANK.NS": "HDFC BANK", "ICICIBANK.NS": "ICICI BANK", "SBIN.NS": "SBI"}
 
@@ -57,7 +47,7 @@ if mode == "SINGLE ASSET":
             if st.button("SCAN", use_container_width=True):
                 if search:
                     search = search.upper().strip()
-                    indian = ['RELIANCE','TCS','INFY','HDFCBANK','ICICIBANK','SBIN','ADANIENT','TATAMOTORS','ITC','WIPRO','BAJFINANCE','LT','MARUTI','AXISBANK']
+                    indian = ['RELIANCE','TCS','INFY','HDFCBANK','ICICIBANK','SBIN','ADANIENT','TATAMOTORS','ITC','WIPRO','BAJFINANCE','LT']
                     if search in indian and '.NS' not in search:
                         search = search + '.NS'
                     elif '.' not in search and len(search) <= 10:
@@ -71,39 +61,48 @@ if mode == "SINGLE ASSET":
 
     st.markdown("---")
 
-    @st.cache_data(ttl=300)
-    def fetch_data(ticker):
+    @st.cache_data(ttl=600)
+    def fetch_data_yq(ticker):
         try:
-            stock = yf.Ticker(ticker)
-            hist = stock.history(period="1y", interval="1d")
-            if hist.empty:
+            t = Ticker(ticker, asynchronous=True, progress=False)
+            hist = t.history(period='1y', interval='1d')
+            if isinstance(hist, dict) or hist.empty:
                 return None, None, None
-            info = stock.info
+
+            if isinstance(hist.index, pd.MultiIndex):
+                hist = hist.reset_index(level=0, drop=True)
+
+            modules = t.asset_profile.get(ticker, {})
+            summary = t.summary_detail.get(ticker, {})
+            financial = t.financial_data.get(ticker, {})
+
+            info = {**modules, **summary, **financial}
+
             try:
-                news = stock.news
+                news = t.news
             except:
                 news = []
+
             return hist, info, news
-        except:
+        except Exception as e:
             return None, None, None
 
     ticker = st.session_state.ticker
     with st.spinner(f'LOADING {ticker}...'):
-        hist, info, news = fetch_data(ticker)
+        hist, info, news = fetch_data_yq(ticker)
 
         if hist is None or hist.empty:
-            st.error(f"Unable to fetch data for {ticker}. Try again in 2 minutes.")
+            st.error(f"Unable to fetch data for {ticker}. Server busy. Try another stock.")
             st.stop()
 
-    # CALCULATIONS
-    current_price = hist['Close'][-1]
-    prev_close = hist['Close'][-2] if len(hist) > 1 else current_price
+    current_price = hist['close'][-1]
+    prev_close = hist['close'][-2] if len(hist) > 1 else current_price
     change = current_price - prev_close
     change_pct = (change / prev_close) * 100 if prev_close!= 0 else 0
 
-    hist['SMA20'] = hist['Close'].rolling(20).mean()
-    hist['SMA50'] = hist['Close'].rolling(50).mean()
-    delta = hist['Close'].diff()
+    hist['SMA20'] = hist['close'].rolling(20).mean()
+    hist['SMA50'] = hist['close'].rolling(50).mean()
+    delta = hist['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
     rs = gain / loss
@@ -154,7 +153,7 @@ if mode == "SINGLE ASSET":
 
     with tab1:
         fig = go.Figure()
-        fig.add_trace(go.Candlestick(x=hist.index, open=hist['Open'], high=hist['High'], low=hist['Low'], close=hist['Close'], increasing_line_color='#00ff88', decreasing_line_color='#ff0055'))
+        fig.add_trace(go.Candlestick(x=hist.index, open=hist['open'], high=hist['high'], low=hist['low'], close=hist['close'], increasing_line_color='#00ff88', decreasing_line_color='#ff0055'))
         fig.add_trace(go.Scatter(x=hist.index, y=hist['SMA20'], line=dict(color='#00d9ff', width=2), name='SMA 20'))
         fig.add_trace(go.Scatter(x=hist.index, y=hist['SMA50'], line=dict(color='#7a00ff', width=2), name='SMA 50'))
         fig.update_layout(template="plotly_dark", height=500, xaxis_rangeslider_visible=False, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", margin=dict(l=0, r=0, t=30, b=0))
@@ -164,28 +163,27 @@ if mode == "SINGLE ASSET":
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("P/E Ratio", f"{info.get('trailingPE', 'N/A')}")
-            st.metric("EPS", f"₹{info.get('trailingEps', 'N/A')}")
-            st.metric("Dividend Yield", f"{info.get('dividendYield', 0)*100:.2f}%")
+            st.metric("EPS", f"₹{info.get('epsTrailingTwelveMonths', 'N/A')}")
         with col2:
             st.metric("Profit Margin", f"{info.get('profitMargins', 0)*100:.1f}%")
-            st.metric("ROE", f"{info.get('returnOnEquity', 0)*100:.1f}%")
             st.metric("Beta", f"{info.get('beta', 'N/A')}")
         with col3:
             st.metric("52W High", f"₹{info.get('fiftyTwoWeekHigh', 0):.2f}")
             st.metric("52W Low", f"₹{info.get('fiftyTwoWeekLow', 0):.2f}")
-            st.metric("50D Avg", f"₹{info.get('fiftyDayAverage', 0):.2f}")
 
     with tab3:
         if news and len(news) > 0:
             for article in news[:8]:
-                pub_date = datetime.fromtimestamp(article['providerPublishTime']).strftime('%d %b %Y')
-                st.markdown(f"""<div class="news-card"><h4 style="color: #00d9ff; margin: 0 0 0.5rem 0;">{article['title']}</h4><p style="color: #7a00ff; font-size: 0.85rem;">{pub_date} | {article['publisher']}</p><a href="{article['link']}" target="_blank" style="color: #00d9ff;">View →</a></div>""", unsafe_allow_html=True)
+                st.markdown(f"**{article.get('title', 'N/A')}**")
+                st.caption(f"{article.get('publisher', '')}")
+                st.markdown(f"[View →]({article.get('link', '#')})")
+                st.markdown("---")
         else:
             st.info("No articles available.")
 
     with tab4:
         pred_days = st.slider("DAYS", 1, 30, 7, label_visibility="collapsed")
-        volatility = hist['Close'].pct_change().std()
+        volatility = hist['close'].pct_change().std()
         trend = (hist['SMA20'][-1] - hist['SMA20'][-10]) / hist['SMA20'][-10] if len(hist) > 10 else 0
         future_price = current_price * (1 + trend * pred_days / 10)
         pred_change = ((future_price - current_price) / current_price) * 100
@@ -218,51 +216,41 @@ elif mode == "PORTFOLIO TRACKER":
         data_list = []
         for tick in st.session_state.watchlist:
             try:
-                stock = yf.Ticker(tick)
-                hist = stock.history(period="5d")
+                t = Ticker(tick)
+                hist = t.history(period="5d")
                 if not hist.empty:
-                    price = hist['Close'][-1]
-                    change = ((hist['Close'][-1] - hist['Close'][0]) / hist['Close'][0]) * 100
+                    if isinstance(hist.index, pd.MultiIndex):
+                        hist = hist.reset_index(level=0, drop=True)
+                    price = hist['close'][-1]
+                    change = ((hist['close'][-1] - hist['close'][0]) / hist['close'][0]) * 100
                     data_list.append({"Symbol": tick, "Price": f"₹{price:.2f}", "5D Change": f"{change:+.2f}%"})
             except:
                 pass
-
         if data_list:
-            df = pd.DataFrame(data_list)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-
+            st.dataframe(pd.DataFrame(data_list), use_container_width=True, hide_index=True)
         if st.button("CLEAR WATCHLIST"):
             st.session_state.watchlist = []
             st.rerun()
 
 elif mode == "COMPARE":
     st.markdown("### COMPARE MULTIPLE STOCKS")
-    col1, col2 = st.columns([3,1])
-    with col1:
-        compare_input = st.text_input("Add Symbol", placeholder="RELIANCE.NS, TCS.NS", label_visibility="collapsed")
-    with col2:
-        if st.button("ADD", use_container_width=True):
-            if compare_input and compare_input.upper() not in st.session_state.compare_list:
-                st.session_state.compare_list.append(compare_input.upper())
-
-    if len(st.session_state.compare_list) > 0:
-        st.write("Selected:", ", ".join(st.session_state.compare_list))
-        if st.button("COMPARE NOW"):
+    compare_input = st.text_input("Add Symbols", placeholder="RELIANCE.NS, TCS.NS", label_visibility="collapsed")
+    if st.button("ADD & COMPARE"):
+        if compare_input:
+            symbols = [s.strip().upper() for s in compare_input.split(',')]
             fig = go.Figure()
-            for tick in st.session_state.compare_list:
+            for tick in symbols:
                 try:
-                    hist = yf.Ticker(tick).history(period="6mo")
+                    hist = Ticker(tick).history(period="6mo")
                     if not hist.empty:
-                        norm_price = (hist['Close'] / hist['Close'][0]) * 100
+                        if isinstance(hist.index, pd.MultiIndex):
+                            hist = hist.reset_index(level=0, drop=True)
+                        norm_price = (hist['close'] / hist['close'][0]) * 100
                         fig.add_trace(go.Scatter(x=hist.index, y=norm_price, name=tick, mode='lines'))
                 except:
                     pass
             fig.update_layout(template="plotly_dark", height=500, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", yaxis_title="Normalized Price (%)")
             st.plotly_chart(fig, use_container_width=True)
-
-        if st.button("CLEAR LIST"):
-            st.session_state.compare_list = []
-            st.rerun()
 
 elif mode == "SCREENER":
     st.markdown("### STOCK SCREENER")
@@ -273,26 +261,24 @@ elif mode == "SCREENER":
         max_pe = st.number_input("Max P/E", value=50.0)
     with col3:
         min_mcap = st.number_input("Min Market Cap (Cr)", value=1000)
-
     if st.button("SCAN MARKET"):
         scan_list = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "ITC.NS", "WIPRO.NS", "BAJFINANCE.NS", "LT.NS"]
         results = []
         with st.spinner("Scanning..."):
             for tick in scan_list:
                 try:
-                    stock = yf.Ticker(tick)
-                    info = stock.info
+                    t = Ticker(tick)
+                    info = {**t.asset_profile.get(tick, {}), **t.summary_detail.get(tick, {})}
                     pe = info.get('trailingPE', 0)
                     mcap = info.get('marketCap', 0) / 10000000
-                    if min_pe <= pe <= max_pe and mcap >= min_mcap:
+                    if pe and min_pe <= pe <= max_pe and mcap >= min_mcap:
                         results.append({"Symbol": tick, "Name": info.get('longName', ''), "P/E": f"{pe:.2f}", "Market Cap": f"₹{mcap:.0f}Cr"})
                 except:
                     pass
-
         if results:
             st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
         else:
             st.warning("No stocks match criteria.")
 
 st.markdown("---")
-st.markdown("""<div style='text-align: center; font-family: Rajdhani, sans-serif; color: #333; font-size: 0.7rem;'>FINVISTA NEXUS v6.0</div>""", unsafe_allow_html=True)
+st.markdown("""<div style='text-align: center; font-family: Rajdhani, sans-serif; color: #333; font-size: 0.7rem;'>FINVISTA NEXUS v7.0</div>""", unsafe_allow_html=True)
