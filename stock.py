@@ -1,5 +1,5 @@
 import streamlit as st
-from yahooquery import Ticker
+from nsepython import *
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
@@ -25,74 +25,60 @@ st.markdown("""
 st.markdown('<p class="nexus-header">FINVISTA NEXUS</p>', unsafe_allow_html=True)
 
 if 'ticker' not in st.session_state:
-    st.session_state.ticker = "RELIANCE.NS"
-if 'watchlist' not in st.session_state:
-    st.session_state.watchlist = ["RELIANCE.NS", "TCS.NS", "INFY.NS"]
+    st.session_state.ticker = "RELIANCE"
 
-mode = st.selectbox("SELECT MODE", ["SINGLE ASSET", "PORTFOLIO TRACKER", "COMPARE", "SCREENER"], label_visibility="collapsed")
+mode = st.selectbox("SELECT MODE", ["SINGLE ASSET", "WATCHLIST", "COMPARE"], label_visibility="collapsed")
 
 if mode == "SINGLE ASSET":
     cols = st.columns(6)
-    trending = {"RELIANCE.NS": "RELIANCE", "TCS.NS": "TCS", "INFY.NS": "INFOSYS", "HDFCBANK.NS": "HDFC BANK", "ICICIBANK.NS": "ICICI BANK", "SBIN.NS": "SBI"}
+    trending = ["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN"]
 
-    for idx, (tick, name) in enumerate(trending.items()):
+    for idx, name in enumerate(trending):
         with cols[idx % 6]:
-            if st.button(name, key=tick, use_container_width=True):
-                st.session_state.ticker = tick
+            if st.button(name, key=name, use_container_width=True):
+                st.session_state.ticker = name
 
-    col1, col2 = st.columns([3,1])
-    with col1:
-        with st.expander("🔍 SEARCH"):
-            search = st.text_input("Symbol", placeholder="RELIANCE, TSLA", label_visibility="collapsed")
-            if st.button("SCAN", use_container_width=True):
-                if search:
-                    search = search.upper().strip()
-                    indian = ['RELIANCE','TCS','INFY','HDFCBANK','ICICIBANK','SBIN','ADANIENT','TATAMOTORS','ITC','WIPRO','BAJFINANCE','LT']
-                    if search in indian and '.NS' not in search:
-                        search = search + '.NS'
-                    elif '.' not in search and len(search) <= 10:
-                        search = search + '.NS'
-                    st.session_state.ticker = search
-    with col2:
-        if st.button("⭐ ADD TO WATCHLIST", use_container_width=True):
-            if st.session_state.ticker not in st.session_state.watchlist:
-                st.session_state.watchlist.append(st.session_state.ticker)
-                st.success("Added!")
+    with st.expander("🔍 SEARCH"):
+        search = st.text_input("Symbol", placeholder="RELIANCE, TCS", label_visibility="collapsed")
+        if st.button("SCAN", use_container_width=True):
+            if search:
+                st.session_state.ticker = search.upper().strip().replace(".NS", "")
 
     st.markdown("---")
 
-    @st.cache_data(ttl=600)
-    def fetch_data_yq(ticker):
+    @st.cache_data(ttl=300)
+    def fetch_nse_data(symbol):
         try:
-            t = Ticker(ticker, asynchronous=True, progress=False)
-            hist = t.history(period='1y', interval='1d')
-            if isinstance(hist, dict) or hist.empty:
-                return None, None, None
+            # NSE se live quote
+            quote = nse_quote_ltp(symbol)
+            # NSE se historical data
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)
+            hist = equity_history(symbol, "EQ", start_date.strftime("%d-%m-%Y"), end_date.strftime("%d-%m-%Y"))
 
-            if isinstance(hist.index, pd.MultiIndex):
-                hist = hist.reset_index(level=0, drop=True)
+            if hist.empty:
+                return None, None
 
-            modules = t.asset_profile.get(ticker, {})
-            summary = t.summary_detail.get(ticker, {})
-            financial = t.financial_data.get(ticker, {})
+            hist = hist.rename(columns={'CH_TIMESTAMP': 'Date', 'CH_OPENING_PRICE': 'open', 'CH_TRADE_HIGH_PRICE': 'high',
+                                      'CH_TRADE_LOW_PRICE': 'low', 'CH_CLOSING_PRICE': 'close', 'CH_TOT_TRADED_QTY': 'volume'})
+            hist['Date'] = pd.to_datetime(hist['Date'])
+            hist = hist.set_index('Date')
+            hist = hist.sort_index()
 
-            info = {**modules, **summary, **financial}
+            # Info ke liye
+            info = nse_eq(symbol)
 
-            try:
-                news = t.news
-            except:
-                news = []
-
-            return hist, info, news
+            return hist, info
         except Exception as e:
-            return None, None, None
+            return None, None
 
     ticker = st.session_state.ticker
     with st.spinner(f'LOADING {ticker}...'):
-        hist, info, news = fetch_data_yq(ticker)
+        hist, info = fetch_nse_data(ticker)
 
         if hist is None or hist.empty:
-            st.error(f"Unable to fetch data for {ticker}. Server busy. Try another stock.")
+            st.error(f"Unable to fetch data for {ticker}. NSE server busy.")
+            st.info("Try: RELIANCE, TCS, INFY, HDFCBANK")
             st.stop()
 
     current_price = hist['close'][-1]
@@ -109,16 +95,16 @@ if mode == "SINGLE ASSET":
     hist['RSI'] = 100 - (100 / (1 + rs))
     rsi = hist['RSI'][-1] if not pd.isna(hist['RSI'][-1]) else 50
 
-    if rsi < 30 and current_price > hist['SMA20'][-1]:
+    if rsi < 30:
         signal = "STRONG BUY"; signal_class = "signal-buy"; signal_icon = "▲▲"
-    elif rsi > 70 and current_price < hist['SMA20'][-1]:
-        signal = "STRONG SELL"; signal_class = "signal-sell"; signal_icon = "▼▼"
+    elif rsi > 70:
+        signal = "SELL"; signal_class = "signal-sell"; signal_icon = "▼▼"
     elif current_price > hist['SMA50'][-1]:
         signal = "BUY"; signal_class = "signal-buy"; signal_icon = "▲▲"
     else:
         signal = "HOLD"; signal_class = "signal-hold"; signal_icon = "■■■"
 
-    st.markdown(f"## {info.get('longName', ticker)} // {ticker}")
+    st.markdown(f"## {info.get('info', {}).get('companyName', ticker)} // {ticker}")
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
@@ -129,13 +115,13 @@ if mode == "SINGLE ASSET":
         st.markdown('</div>', unsafe_allow_html=True)
     with col2:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<p class="metric-label">Market Cap</p>', unsafe_allow_html=True)
-        st.markdown(f'<p class="metric-value">₹{info.get("marketCap", 0)/10000000:.0f}Cr</p>', unsafe_allow_html=True)
+        st.markdown('<p class="metric-label">Day High</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="metric-value">₹{hist["high"][-1]:.2f}</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     with col3:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-        st.markdown('<p class="metric-label">P/E</p>', unsafe_allow_html=True)
-        st.markdown(f'<p class="metric-value">{info.get("trailingPE", "N/A")}</p>', unsafe_allow_html=True)
+        st.markdown('<p class="metric-label">Day Low</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="metric-value">₹{hist["low"][-1]:.2f}</p>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     with col4:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
@@ -149,7 +135,7 @@ if mode == "SINGLE ASSET":
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    tab1, tab2, tab3, tab4 = st.tabs(["CHART", "DATA", "NEWS", "FORECAST"])
+    tab1, tab2, tab3 = st.tabs(["CHART", "DATA", "FORECAST"])
 
     with tab1:
         fig = go.Figure()
@@ -162,26 +148,16 @@ if mode == "SINGLE ASSET":
     with tab2:
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.metric("P/E Ratio", f"{info.get('trailingPE', 'N/A')}")
-            st.metric("EPS", f"₹{info.get('epsTrailingTwelveMonths', 'N/A')}")
+            st.metric("52W High", f"₹{hist['high'].max():.2f}")
+            st.metric("Volume", f"{hist['volume'][-1]:,.0f}")
         with col2:
-            st.metric("Profit Margin", f"{info.get('profitMargins', 0)*100:.1f}%")
-            st.metric("Beta", f"{info.get('beta', 'N/A')}")
+            st.metric("52W Low", f"₹{hist['low'].min():.2f}")
+            st.metric("Avg Volume", f"{hist['volume'].mean():,.0f}")
         with col3:
-            st.metric("52W High", f"₹{info.get('fiftyTwoWeekHigh', 0):.2f}")
-            st.metric("52W Low", f"₹{info.get('fiftyTwoWeekLow', 0):.2f}")
+            st.metric("30D Avg", f"₹{hist['close'].tail(30).mean():.2f}")
+            st.metric("Volatility", f"{hist['close'].pct_change().std()*100:.2f}%")
 
     with tab3:
-        if news and len(news) > 0:
-            for article in news[:8]:
-                st.markdown(f"**{article.get('title', 'N/A')}**")
-                st.caption(f"{article.get('publisher', '')}")
-                st.markdown(f"[View →]({article.get('link', '#')})")
-                st.markdown("---")
-        else:
-            st.info("No articles available.")
-
-    with tab4:
         pred_days = st.slider("DAYS", 1, 30, 7, label_visibility="collapsed")
         volatility = hist['close'].pct_change().std()
         trend = (hist['SMA20'][-1] - hist['SMA20'][-10]) / hist['SMA20'][-10] if len(hist) > 10 else 0
@@ -208,77 +184,28 @@ if mode == "SINGLE ASSET":
             st.markdown(f'<p class="metric-value" style="color:{risk_color};">{risk}</p>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-elif mode == "PORTFOLIO TRACKER":
+elif mode == "WATCHLIST":
     st.markdown("### WATCHLIST")
-    if len(st.session_state.watchlist) == 0:
-        st.info("Watchlist empty. Add stocks from SINGLE ASSET mode.")
-    else:
-        data_list = []
-        for tick in st.session_state.watchlist:
-            try:
-                t = Ticker(tick)
-                hist = t.history(period="5d")
-                if not hist.empty:
-                    if isinstance(hist.index, pd.MultiIndex):
-                        hist = hist.reset_index(level=0, drop=True)
-                    price = hist['close'][-1]
-                    change = ((hist['close'][-1] - hist['close'][0]) / hist['close'][0]) * 100
-                    data_list.append({"Symbol": tick, "Price": f"₹{price:.2f}", "5D Change": f"{change:+.2f}%"})
-            except:
-                pass
-        if data_list:
-            st.dataframe(pd.DataFrame(data_list), use_container_width=True, hide_index=True)
-        if st.button("CLEAR WATCHLIST"):
-            st.session_state.watchlist = []
-            st.rerun()
+    st.info("Add stocks from SINGLE ASSET mode first")
 
 elif mode == "COMPARE":
-    st.markdown("### COMPARE MULTIPLE STOCKS")
-    compare_input = st.text_input("Add Symbols", placeholder="RELIANCE.NS, TCS.NS", label_visibility="collapsed")
-    if st.button("ADD & COMPARE"):
-        if compare_input:
-            symbols = [s.strip().upper() for s in compare_input.split(',')]
-            fig = go.Figure()
-            for tick in symbols:
-                try:
-                    hist = Ticker(tick).history(period="6mo")
-                    if not hist.empty:
-                        if isinstance(hist.index, pd.MultiIndex):
-                            hist = hist.reset_index(level=0, drop=True)
-                        norm_price = (hist['close'] / hist['close'][0]) * 100
-                        fig.add_trace(go.Scatter(x=hist.index, y=norm_price, name=tick, mode='lines'))
-                except:
-                    pass
-            fig.update_layout(template="plotly_dark", height=500, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", yaxis_title="Normalized Price (%)")
-            st.plotly_chart(fig, use_container_width=True)
-
-elif mode == "SCREENER":
-    st.markdown("### STOCK SCREENER")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        min_pe = st.number_input("Min P/E", value=0.0)
-    with col2:
-        max_pe = st.number_input("Max P/E", value=50.0)
-    with col3:
-        min_mcap = st.number_input("Min Market Cap (Cr)", value=1000)
-    if st.button("SCAN MARKET"):
-        scan_list = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "ITC.NS", "WIPRO.NS", "BAJFINANCE.NS", "LT.NS"]
-        results = []
-        with st.spinner("Scanning..."):
-            for tick in scan_list:
-                try:
-                    t = Ticker(tick)
-                    info = {**t.asset_profile.get(tick, {}), **t.summary_detail.get(tick, {})}
-                    pe = info.get('trailingPE', 0)
-                    mcap = info.get('marketCap', 0) / 10000000
-                    if pe and min_pe <= pe <= max_pe and mcap >= min_mcap:
-                        results.append({"Symbol": tick, "Name": info.get('longName', ''), "P/E": f"{pe:.2f}", "Market Cap": f"₹{mcap:.0f}Cr"})
-                except:
-                    pass
-        if results:
-            st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
-        else:
-            st.warning("No stocks match criteria.")
+    st.markdown("### COMPARE")
+    symbols = st.text_input("Enter symbols comma separated", "RELIANCE,TCS,INFY", label_visibility="collapsed")
+    if st.button("COMPARE NOW"):
+        fig = go.Figure()
+        for tick in symbols.split(','):
+            tick = tick.strip()
+            try:
+                hist = equity_history(tick, "EQ", "01-01-2024", datetime.now().strftime("%d-%m-%Y"))
+                if not hist.empty:
+                    hist['Date'] = pd.to_datetime(hist['CH_TIMESTAMP'])
+                    hist = hist.set_index('Date').sort_index()
+                    norm_price = (hist['CH_CLOSING_PRICE'] / hist['CH_CLOSING_PRICE'][0]) * 100
+                    fig.add_trace(go.Scatter(x=hist.index, y=norm_price, name=tick, mode='lines'))
+            except:
+                pass
+        fig.update_layout(template="plotly_dark", height=500, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", yaxis_title="Normalized Price (%)")
+        st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
-st.markdown("""<div style='text-align: center; font-family: Rajdhani, sans-serif; color: #333; font-size: 0.7rem;'>FINVISTA NEXUS v7.0</div>""", unsafe_allow_html=True)
+st.markdown("""<div style='text-align: center; font-family: Rajdhani, sans-serif; color: #333; font-size: 0.7rem;'>FINVISTA NEXUS v8.0 - NSE DIRECT</div>""", unsafe_allow_html=True)
