@@ -1,5 +1,5 @@
 streamlit
-yahooquery==2.3.0
+nsepython==0.0.967
 plotly
 pandas
 numpy
